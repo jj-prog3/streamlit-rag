@@ -4,7 +4,7 @@ import copy
 
 # LangChain 관련 라이브러리 임포트
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.docstore.document import Document
+from langchain_core.documents import Document
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import CacheBackedEmbeddings
 from langchain.vectorstores import FAISS
