@@ -1,12 +1,12 @@
 import streamlit as st
 from pathlib import Path
 
-# LangChain 관련 라이브러리 (버전 고정 최종본)
+# LangChain 관련 라이브러리 (DocArray 버전 최종본)
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import CharacterTextSplitter
 from langchain.embeddings import CacheBackedEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import DocArrayInMemorySearch # FAISS 대신 DocArray 사용
 from langchain.storage import LocalFileStore
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
@@ -70,7 +70,8 @@ def process_file_and_create_chain(api_key, uploaded_file):
             embeddings, cache_dir
         )
         
-        vectorstore = FAISS.from_documents(docs, cached_embeddings)
+        # FAISS 대신 DocArrayInMemorySearch를 사용하여 벡터 저장소 생성
+        vectorstore = DocArrayInMemorySearch.from_documents(docs, cached_embeddings)
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
         prompt = ChatPromptTemplate.from_messages([
@@ -81,9 +82,6 @@ def process_file_and_create_chain(api_key, uploaded_file):
 
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
-
-        def get_history(session_messages):
-            return [msg for msg in session_messages if not isinstance(msg, AIMessage) or len(session_messages) == 1]
 
         rag_chain = (
             {
