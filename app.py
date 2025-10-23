@@ -1,13 +1,11 @@
 import streamlit as st
 from pathlib import Path
 
-# LangChain 관련 라이브러리 (DocArray 버전 최종본)
+# LangChain 관련 라이브러리 (ChromaDB 최종본)
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import CharacterTextSplitter
-from langchain.embeddings import CacheBackedEmbeddings
-from langchain_community.vectorstores import DocArrayInMemorySearch # FAISS 대신 DocArray 사용
-from langchain.storage import LocalFileStore
+from langchain_community.vectorstores import Chroma # ChromaDB 사용
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -35,43 +33,33 @@ with st.sidebar:
     )
     st.markdown("---")
     st.markdown(
-        "❤️ [GitHub Repository](https://github.com/your-username/your-repo)" # 본인의 리포지토리 주소로 변경하세요
+        "❤️ [GitHub Repository](https://github.com/jj-prog3/streamlit-rag)"
     )
 
 # --- 세션 상태 초기화 ---
-def initialize_session_state():
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            AIMessage(content="안녕하세요! 분석할 문서를 업로드하고 질문을 시작하세요.")
-        ]
-    if "chain" not in st.session_state:
-        st.session_state.chain = None
-    if "processed_file_name" not in st.session_state:
-        st.session_state.processed_file_name = None
-
-initialize_session_state()
+if "chain" not in st.session_state:
+    st.session_state.chain = None
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        AIMessage(content="안녕하세요! 분석할 문서를 업로드하고 질문을 시작하세요.")
+    ]
 
 # --- 핵심 로직: 파일 처리 및 체인 생성 ---
-def process_file_and_create_chain(api_key, uploaded_file):
+@st.cache_resource(show_spinner="⏳ 문서를 처리하고 있습니다...")
+def process_file_and_create_chain(_api_key, _uploaded_file):
     try:
-        llm = ChatOpenAI(temperature=0.1, max_tokens=1024, openai_api_key=api_key)
-        embeddings = OpenAIEmbeddings(openai_api_key=api_key)
-        
-        file_content = uploaded_file.getvalue().decode("utf-8")
-        raw_doc = [Document(page_content=file_content)]
+        file_content = _uploaded_file.getvalue().decode("utf-8")
+        docs = [Document(page_content=file_content)]
 
         splitter = CharacterTextSplitter.from_tiktoken_encoder(
-            separator="\n", chunk_size=300, chunk_overlap=50
+            chunk_size=500, chunk_overlap=50
         )
-        docs = splitter.split_documents(raw_doc)
+        split_docs = splitter.split_documents(docs)
 
-        cache_dir = LocalFileStore(f"./.cache/{uploaded_file.name}")
-        cached_embeddings = CacheBackedEmbeddings.from_bytes_store(
-            embeddings, cache_dir
-        )
+        embeddings = OpenAIEmbeddings(openai_api_key=_api_key)
         
-        # FAISS 대신 DocArrayInMemorySearch를 사용하여 벡터 저장소 생성
-        vectorstore = DocArrayInMemorySearch.from_documents(docs, cached_embeddings)
+        # Chroma를 사용하여 벡터 저장소 생성
+        vectorstore = Chroma.from_documents(split_docs, embeddings)
         retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
         prompt = ChatPromptTemplate.from_messages([
@@ -90,46 +78,42 @@ def process_file_and_create_chain(api_key, uploaded_file):
                 "history": lambda x: st.session_state.get('messages', [])
             }
             | prompt
-            | llm
+            | ChatOpenAI(temperature=0.1, max_tokens=1024, openai_api_key=_api_key)
             | StrOutputParser()
         )
-        
-        st.session_state.chain = rag_chain
-        st.session_state.processed_file_name = uploaded_file.name
-        return True
+        return rag_chain
     
     except Exception as e:
         st.error(f"파일 처리 중 오류 발생: {e}")
-        return False
+        return None
 
 # --- 메인 화면 로직 ---
-if not api_key:
-    st.info("👈 사이드바에서 OpenAI API Key를 입력해주세요.")
-elif not uploaded_file:
-    st.info("👈 사이드바에서 분석할 문서를 업로드해주세요.")
-else:
-    if st.session_state.processed_file_name != uploaded_file.name:
-        with st.spinner("⏳ 문서를 처리하고 있습니다..."):
-            if process_file_and_create_chain(api_key, uploaded_file):
-                st.success(f"'{uploaded_file.name}' 문서 처리가 완료되었습니다!")
-                st.session_state.messages = [
-                    AIMessage(content=f"'{uploaded_file.name}'에 대해 질문해주세요.")
-                ]
+if api_key and uploaded_file:
+    # 파일이 변경되면 체인을 다시 생성
+    st.session_state.chain = process_file_and_create_chain(api_key, uploaded_file)
     
-    # 채팅 기록 표시
-    for msg in st.session_state.messages:
-        role = "assistant" if isinstance(msg, AIMessage) else "user"
-        st.chat_message(role).write(msg.content)
+    if "new_file" not in st.session_state or st.session_state.new_file != uploaded_file.name:
+        st.session_state.new_file = uploaded_file.name
+        st.session_state.messages = [
+            AIMessage(content=f"'{uploaded_file.name}'에 대해 질문해주세요.")
+        ]
+else:
+    st.info("👈 사이드바에서 OpenAI API Key를 입력하고 문서를 업로드해주세요.")
 
-    # 사용자 입력 처리
-    if user_query := st.chat_input("문서에 대해 질문을 입력하세요..."):
-        if st.session_state.chain:
-            st.session_state.messages.append(HumanMessage(content=user_query))
-            st.chat_message("user").write(user_query)
+# 채팅 기록 표시
+for msg in st.session_state.messages:
+    role = "assistant" if isinstance(msg, AIMessage) else "user"
+    st.chat_message(role).write(msg.content)
 
-            with st.spinner("답변을 생성 중입니다..."):
-                response = st.session_state.chain.invoke(user_query)
-                st.session_state.messages.append(AIMessage(content=response))
-                st.chat_message("assistant").write(response)
-        else:
-            st.warning("문서가 아직 처리되지 않았습니다. 잠시만 기다려주세요.")
+# 사용자 입력 처리
+if user_query := st.chat_input("문서에 대해 질문을 입력하세요..."):
+    if not st.session_state.chain:
+        st.warning("먼저 문서를 업로드하고 처리해야 합니다.")
+    else:
+        st.session_state.messages.append(HumanMessage(content=user_query))
+        st.chat_message("user").write(user_query)
+
+        with st.spinner("답변을 생성 중입니다..."):
+            response = st.session_state.chain.invoke(user_query)
+            st.session_state.messages.append(AIMessage(content=response))
+            st.chat_message("assistant").write(response)
