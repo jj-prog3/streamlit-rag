@@ -1,11 +1,10 @@
 import streamlit as st
 from pathlib import Path
 
-# LangChain 관련 라이브러리 (최신 버전 기준 전체 수정)
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import CharacterTextSplitter
-from langchain.embeddings.cache import CacheBackedEmbeddings
+from langchain.embeddings import CacheBackedEmbeddings  # <-- 수정된 부분
 from langchain_community.vectorstores import FAISS
 from langchain.storage import LocalFileStore
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
