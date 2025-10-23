@@ -1,6 +1,5 @@
 import streamlit as st
 from pathlib import Path
-import copy
 
 # LangChain 관련 라이브러리 (최신 버전 기준 전체 수정)
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
