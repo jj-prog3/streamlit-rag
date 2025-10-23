@@ -5,7 +5,7 @@ from pathlib import Path
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import CharacterTextSplitter
-from langchain.embeddings import CacheBackedEmbeddings
+from langchain.embeddings.cache import CacheBackedEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.storage import LocalFileStore
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
