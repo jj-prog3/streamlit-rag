@@ -1,8 +1,8 @@
-streamlit
-langchain>=0.2.0
-langchain-openai
-langchain-core
-langchain-community
-langchain-text-splitters
-faiss-cpu
-tiktoken
+streamlit>=1.36
+langchain==0.2.15
+langchain-openai==0.2.7
+langchain-community==0.2.9
+langchain-text-splitters==0.2.2
+faiss-cpu>=1.8.0
+tiktoken>=0.7.0
+pydantic>=2.7
